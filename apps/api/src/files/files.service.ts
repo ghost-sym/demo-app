@@ -1,19 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { FileRecord } from './file.entity';
 import { BlobStorageService } from '../blob-storage/blob-storage.service';
 
-export const FILE_PROCESSING_QUEUE = 'file-processing';
-
 @Injectable()
 export class FilesService {
   constructor(
     @InjectRepository(FileRecord) private readonly filesRepo: Repository<FileRecord>,
-    @InjectQueue(FILE_PROCESSING_QUEUE) private readonly queue: Queue,
     private readonly blobStorage: BlobStorageService,
   ) {}
 
@@ -30,11 +25,7 @@ export class FilesService {
       result: null,
       error: null,
     });
-    const saved = await this.filesRepo.save(record);
-
-    await this.queue.add('process', { fileId: saved.id });
-
-    return saved;
+    return this.filesRepo.save(record);
   }
 
   findAll(): Promise<FileRecord[]> {

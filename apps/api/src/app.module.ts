@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { BullModule } from '@nestjs/bullmq';
 import { FilesModule } from './files/files.module';
 
 @Module({
@@ -17,14 +16,6 @@ import { FilesModule } from './files/files.module';
       autoLoadEntities: true,
       synchronize: true,
       ssl: process.env.POSTGRES_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
-    }),
-    BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_HOST ?? 'localhost',
-        port: Number(process.env.REDIS_PORT ?? 6379),
-        password: process.env.REDIS_PASSWORD || undefined,
-        tls: process.env.REDIS_TLS === 'true' ? {} : undefined,
-      },
     }),
     FilesModule,
   ],
