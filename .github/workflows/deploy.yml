@@ -1,6 +1,6 @@
 # Build apps/api + apps/worker + apps/web -> push to private ACR -> roll the
 # `api`, `worker` and `web` Container Apps. Runs on the jumpbox VM (self-hosted,
-# label `jumpbox`) inside shyam-vnet, so it reaches ShyamDemo.azurecr.io over
+# label `jumpbox`) inside shyam-vnet, so it reaches shyamdemoacr.azurecr.io over
 # the private endpoint.
 # Auth is GitHub OIDC: the job's id-token is exchanged for an Azure token as the
 # `shyam-github-deploy` federated identity (AcrPush on the registry, Contributor
@@ -23,7 +23,7 @@ concurrency:
 
 env:
   RESOURCE_GROUP: shyam-rg
-  ACR_NAME: ShyamDemo
+  ACR_NAME: shyamdemoacr
 
 jobs:
   deploy:
