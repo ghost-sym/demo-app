@@ -1,6 +1,8 @@
 import type { FileRecord } from './types';
 
-const API_BASE = '/api';
+// In dev this is '/api' (Vite proxies it to the API). In the deployed `web`
+// container it's baked at build time to the API app's public URL + '/api'.
+const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
 
 export async function fetchFiles(): Promise<FileRecord[]> {
   const res = await fetch(`${API_BASE}/files`);
