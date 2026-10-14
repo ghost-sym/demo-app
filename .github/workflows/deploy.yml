@@ -1,9 +1,10 @@
-# Build apps/api + apps/web -> push to private ACR -> roll the `api` and `web`
-# Container Apps. Runs on the jumpbox VM (self-hosted, label `jumpbox`) inside
-# shyam-vnet, so it reaches ShyamDemo.azurecr.io over the private endpoint.
+# Build apps/api + apps/worker + apps/web -> push to private ACR -> roll the
+# `api`, `worker` and `web` Container Apps. Runs on the jumpbox VM (self-hosted,
+# label `jumpbox`) inside shyam-vnet, so it reaches ShyamDemo.azurecr.io over
+# the private endpoint.
 # Auth is the VM's managed identity (AcrPush on the registry, Contributor on
-# `api` + `web`, Reader on the RG) — no secrets stored in GitHub.
-name: Deploy api + web
+# `api`, `worker` + `web`, Reader on the RG) — no secrets stored in GitHub.
+name: Deploy api + worker + web
 
 on:
   push:
@@ -37,6 +38,7 @@ jobs:
           api_fqdn=$(az containerapp show -n api -g "$RESOURCE_GROUP" \
             --query properties.configuration.ingress.fqdn -o tsv)
           echo "API_IMAGE=${login_server}/demo-api:${tag}" >> "$GITHUB_ENV"
+          echo "WORKER_IMAGE=${login_server}/demo-worker:${tag}" >> "$GITHUB_ENV"
           echo "WEB_IMAGE=${login_server}/demo-web:${tag}" >> "$GITHUB_ENV"
           echo "VITE_API_BASE=https://${api_fqdn}/api" >> "$GITHUB_ENV"
 
@@ -48,6 +50,15 @@ jobs:
 
       - name: Deploy api
         run: az containerapp update -n api -g "$RESOURCE_GROUP" --image "$API_IMAGE" --output none
+
+      # --- worker --------------------------------------------------------------
+      - name: Build + push worker
+        run: |
+          docker build -t "$WORKER_IMAGE" apps/worker
+          docker push "$WORKER_IMAGE"
+
+      - name: Deploy worker
+        run: az containerapp update -n worker -g "$RESOURCE_GROUP" --image "$WORKER_IMAGE" --output none
 
       # --- web (API URL is baked in at build time) ---------------------------
       - name: Build + push web
@@ -63,4 +74,4 @@ jobs:
 
       - name: Clean up local images
         if: always()
-        run: docker image rm "$API_IMAGE" "$WEB_IMAGE" 2>/dev/null || true
+        run: docker image rm "$API_IMAGE" "$WORKER_IMAGE" "$WEB_IMAGE" 2>/dev/null || true
