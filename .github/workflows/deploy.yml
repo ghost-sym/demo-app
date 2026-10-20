@@ -10,7 +10,7 @@ name: Deploy api + worker + web
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
   workflow_dispatch:
 
 permissions:
