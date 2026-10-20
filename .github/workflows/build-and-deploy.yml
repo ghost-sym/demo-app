@@ -1,0 +1,87 @@
+# Build apps/api + apps/worker + apps/web -> push to private ACR -> roll the
+# `api`, `worker` and `web` Container Apps. Runs on the jumpbox VM (self-hosted,
+# label `jumpbox`) inside shyam-vnet, so it reaches shyamdemoacr.azurecr.io over
+# the private endpoint.
+# Auth is GitHub OIDC: the job's id-token is exchanged for an Azure token as the
+# `shyam-github-deploy` federated identity (AcrPush on the registry, Contributor
+# on `api`, `worker` + `web`, Reader on the RG). No secrets stored anywhere —
+# AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID are repo variables.
+name: build-and-deploy
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  id-token: write # request the OIDC token
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  RESOURCE_GROUP: shyam-rg
+  ACR_NAME: shyamdemoacr
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, jumpbox]
+    strategy:
+      matrix:
+        service: [api, worker, web]
+      max-parallel: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login + CLI extension
+        run: |
+          az extension add --name containerapp --upgrade --yes --only-show-errors
+          az acr login -n "$ACR_NAME"
+
+      # Image is tagged with the full commit SHA (what gets deployed, so a
+      # revision maps 1:1 to a commit) and with :latest (moved to this push).
+      - name: Resolve image tag + API URL
+        run: |
+          login_server=$(az acr show -n "$ACR_NAME" --query loginServer -o tsv)
+          tag=${GITHUB_SHA}
+          echo "LOGIN_SERVER=${login_server}" >> "$GITHUB_ENV"
+          echo "IMAGE=${login_server}/demo-app/${{ matrix.service }}:${tag}" >> "$GITHUB_ENV"
+          echo "IMAGE_LATEST=${login_server}/demo-app/${{ matrix.service }}:latest" >> "$GITHUB_ENV"
+          api_fqdn=$(az containerapp show -n api -g "$RESOURCE_GROUP" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "VITE_API_BASE=https://${api_fqdn}/api" >> "$GITHUB_ENV"
+
+      - name: Build + push image
+        run: |
+          if [ "${{ matrix.service }}" = "web" ]; then
+            docker build --build-arg VITE_API_BASE="$VITE_API_BASE" \
+              -t "$IMAGE" -t "$IMAGE_LATEST" apps/${{ matrix.service }}
+          else
+            docker build -t "$IMAGE" -t "$IMAGE_LATEST" apps/${{ matrix.service }}
+          fi
+          docker push "$IMAGE"
+          docker push "$IMAGE_LATEST"
+
+      - name: Deploy container app
+        run: |
+          az containerapp update -n ${{ matrix.service }} -g "$RESOURCE_GROUP" --image "$IMAGE" --output none
+          if [ "${{ matrix.service }}" = "web" ]; then
+            echo "Live: https://$(az containerapp show -n web -g "$RESOURCE_GROUP" \
+              --query properties.configuration.ingress.fqdn -o tsv)"
+          fi
+
+      - name: Clean up images + registry login
+        if: always()
+        run: |
+          docker image rm "$IMAGE" "$IMAGE_LATEST" 2>/dev/null || true
+          # Runner is persistent: don't leave the ACR token in ~/.docker/config.json.
+          docker logout "$LOGIN_SERVER" || true
