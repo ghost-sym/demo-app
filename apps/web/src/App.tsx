@@ -27,6 +27,7 @@ export default function App() {
         <p className="subtitle">
           React SPA → NestJS API → Blob Storage + Postgres → Worker (queue)
         </p>
+        <p className="subtitle">Build v2 — deploy check</p>
       </header>
 
       <UploadForm onUploaded={refresh} />
