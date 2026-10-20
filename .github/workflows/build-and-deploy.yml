@@ -28,7 +28,7 @@ env:
 
 jobs:
   deploy:
-    runs-on: [self-hosted, jumpbox]
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         service: [api, worker, web]
