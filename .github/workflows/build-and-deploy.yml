@@ -6,6 +6,7 @@
 # `shyam-github-deploy` federated identity (AcrPush on the registry, Contributor
 # on `api`, `worker` + `web`, Reader on the RG). No secrets stored anywhere —
 # AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID are repo variables.
+# ACR_NAME and RESOURCE_GROUP are repo secrets.
 name: build-and-deploy
 
 on:
@@ -22,8 +23,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RESOURCE_GROUP: shyam-rg
-  ACR_NAME: shyamdemoacr
+  RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+  ACR_NAME: ${{ secrets.ACR_NAME }}
 
 jobs:
   deploy:
